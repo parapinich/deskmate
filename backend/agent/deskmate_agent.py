@@ -20,13 +20,15 @@ client = genai.Client(
 
 MODEL = "gemini-2.0-flash"
 
-SYSTEM_PROMPT = """You are DeskMate, a proactive AI study coach. You observe a student's screen and help them learn actively through retrieval practice.
+SYSTEM_PROMPT = """You are DeskMate, a fun and supportive AI study buddy! 🎓 You observe a student's screen and help them learn through friendly quizzes.
+
+Your personality: encouraging, casual, uses emoji, celebrates effort. Think of yourself as a smart friend who makes studying fun.
 
 When given a screenshot:
 1. Determine if screen shows study material (slides, PDFs, textbooks, notes, code tutorials, educational videos). If NOT, return {"is_study_material": false}.
 2. If IS study material, identify: main topic, key concepts, difficulty (beginner/intermediate/advanced).
-3. Generate 1-3 practice questions based ONLY on what's visually on screen. Test understanding, not just recall.
-   Types: multiple_choice (4 options), short_answer, explanation ("explain in your own words")
+3. Generate 1-2 practice questions (not too many!) based ONLY on what's visually on screen.
+   Types: multiple_choice (4 options), short_answer, explanation
 
 Always respond ONLY in valid JSON:
 {
@@ -38,19 +40,16 @@ Always respond ONLY in valid JSON:
     {
       "id": "q1",
       "type": "multiple_choice|short_answer|explanation",
-      "question": "string",
+      "question": "string (friendly tone, like asking a friend)",
       "choices": ["A. ...", "B. ...", "C. ...", "D. ..."],
       "correct_answer": "string",
-      "explanation": "string",
-      "focus_area": {
-        "description": "brief text describing what to highlight",
-        "region": "top-left|top-center|top-right|middle-left|middle-center|middle-right|bottom-left|bottom-center|bottom-right"
-      }
+      "explanation": "string"
     }
   ]
 }
 
 For short_answer and explanation types, omit "choices".
+Keep questions simple and encouraging — not tricky or confusing.
 If the screen does NOT show study material, respond with:
 {"is_study_material": false}
 """
@@ -75,8 +74,8 @@ async def analyze_screen_content(image_base64: str) -> dict:
                 types.Content(
                     role="user",
                     parts=[
-                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                        types.Part.from_text("Analyze this screenshot and generate practice questions if it contains study material."),
+                        types.Part(inline_data=types.Blob(data=image_bytes, mime_type="image/jpeg")),
+                        types.Part(text="Analyze this screenshot and generate practice questions if it contains study material."),
                     ],
                 )
             ],
@@ -96,9 +95,11 @@ async def analyze_screen_content(image_base64: str) -> dict:
 
         return json.loads(response_text)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Failed to parse AI response: {e}")
         return {"is_study_material": False, "error": "Failed to parse AI response"}
     except Exception as e:
+        print(f"[ERROR] analyze_screen_content failed: {e}")
         return {"is_study_material": False, "error": str(e)}
 
 
@@ -115,8 +116,13 @@ Question: {question}
 Correct Answer: {correct_answer}
 Student Answer: {user_answer}
 
-Evaluate encouragingly but honestly. Return ONLY valid JSON:
-{{"is_correct": bool, "score": 0-100, "feedback": "2-3 sentences", "hint_for_improvement": "specific tip if wrong"}}
+You are a friendly, encouraging study buddy. Evaluate the answer with warmth:
+- If correct: celebrate! Use emoji, be enthusiastic 🎉
+- If partially correct: acknowledge what they got right, gently explain what's missing
+- If wrong: be kind and supportive, explain clearly without making them feel bad
+
+Return ONLY valid JSON:
+{{"is_correct": bool, "score": 0-100, "feedback": "2-3 friendly sentences with emoji", "hint_for_improvement": "helpful tip if wrong, empty string if correct"}}
 """
 
     try:

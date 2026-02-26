@@ -3,15 +3,13 @@
  * WebSocket client + UI logic for the Tauri desktop app.
  */
 
-const { invoke } = window.__TAURI__.core;
-
 // ===========================
 // Configuration
 // ===========================
 
-const BACKEND_WS_URL = "wss://deskmate-backend-93867190499.us-central1.run.app/ws/study-session";
-const BACKEND_API_URL = "https://deskmate-backend-93867190499.us-central1.run.app/api";
-const CAPTURE_INTERVAL_MS = 10000; // 10 seconds
+const BACKEND_WS_URL = "ws://localhost:8080/ws/study-session";
+const BACKEND_API_URL = "http://localhost:8080/api";
+const CAPTURE_INTERVAL_MS = 30000; // 30 seconds — gives time to answer
 
 // ===========================
 // State
@@ -25,46 +23,70 @@ let sessionStartTime = null;
 let totalQuestions = 0;
 let correctAnswers = 0;
 let currentTopic = "";
+let unansweredCount = 0; // Track unanswered questions to pause capture
+
+// ===========================
+// Tauri API (lazy load)
+// ===========================
+
+async function tauriInvoke(cmd, args) {
+  try {
+    // Tauri v2 internal invoke — always available in Tauri webview
+    if (window.__TAURI_INTERNALS__) {
+      return await window.__TAURI_INTERNALS__.invoke(cmd, args || {});
+    }
+    // Fallback: Tauri v2 global API
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      return await window.__TAURI__.core.invoke(cmd, args || {});
+    }
+    console.error("Tauri API not found!");
+  } catch (err) {
+    console.error("Tauri invoke error:", cmd, err);
+  }
+  return null;
+}
 
 // ===========================
 // WebSocket
 // ===========================
 
 function connectWebSocket() {
+  setStatus("Connecting...", false);
+
   ws = new WebSocket(`${BACKEND_WS_URL}?session_id=${sessionId}`);
 
   ws.onopen = () => {
-    setStatus("Watching your screen...", true);
+    console.log("WebSocket connected!");
+    setStatus("👋 Hey! I'm watching your screen...", true);
+    showGreeting();
+    // Send first capture after a short delay
+    setTimeout(captureAndSend, 2000);
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    try {
+      const data = JSON.parse(event.data);
 
-    if (data.error) {
-      console.error("Server error:", data.error);
-      return;
-    }
-
-    if (data.skipped) {
-      // Duplicate screenshot — no new questions
-      return;
-    }
-
-    if (data.is_study_material && data.questions && data.questions.length > 0) {
-      currentTopic = data.topic || "";
-      setStatus(`📚 ${data.topic} — ${data.difficulty}`, true);
-      displayQuestions(data.questions, data.topic);
-
-      // Annotate screen with focus area of the first question
-      const firstQ = data.questions[0];
-      if (firstQ.focus_area) {
-        invoke("show_annotation", {
-          region: firstQ.focus_area.region,
-          label: `📌 ${firstQ.focus_area.description}`
-        }).catch(console.error);
+      if (data.error) {
+        console.error("Server error:", data.error);
+        setStatus("⚠ Server error", false);
+        return;
       }
-    } else if (data.is_study_material === false && !data.skipped) {
-      setStatus("👀 No study material detected — watching...", true);
+
+      if (data.skipped) {
+        // Duplicate screenshot — no new questions
+        return;
+      }
+
+      if (data.is_study_material && data.questions && data.questions.length > 0) {
+        currentTopic = data.topic || "";
+        setStatus(`📚 ${data.topic} — ${data.difficulty}`, true);
+        displayQuestions(data.questions, data.topic);
+      } else if (data.is_study_material === false && !data.skipped) {
+        setStatus("👀 No study material detected — watching...", true);
+      }
+    } catch (err) {
+      console.error("Failed to parse message:", err);
     }
   };
 
@@ -74,8 +96,11 @@ function connectWebSocket() {
   };
 
   ws.onclose = () => {
-    setStatus("Reconnecting...", false);
-    setTimeout(connectWebSocket, 3000);
+    if (captureInterval) {
+      // Only reconnect if session is active
+      setStatus("Reconnecting...", false);
+      setTimeout(connectWebSocket, 3000);
+    }
   };
 }
 
@@ -84,8 +109,21 @@ function connectWebSocket() {
 // ===========================
 
 async function captureAndSend() {
+  // Pause capture if there are unanswered questions
+  if (unansweredCount > 0) {
+    console.log(`Pausing capture — ${unansweredCount} unanswered question(s)`);
+    return;
+  }
+
   try {
-    const result = await invoke("take_screenshot");
+    setStatus("📸 Scanning your screen...", true);
+    const result = await tauriInvoke("take_screenshot");
+    if (!result) {
+      console.warn("Screenshot returned empty");
+      setStatus("👀 Watching your screen...", true);
+      return;
+    }
+
     const parsed = JSON.parse(result);
 
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -93,9 +131,12 @@ async function captureAndSend() {
         screenshot: parsed.screenshot,
         session_id: sessionId
       }));
+      console.log("Screenshot sent to server");
+      setStatus("🧠 Analyzing what you're studying...", true);
     }
   } catch (err) {
     console.error("Capture failed:", err);
+    setStatus("👀 Watching your screen...", true);
   }
 }
 
@@ -104,13 +145,13 @@ async function captureAndSend() {
 // ===========================
 
 function startSession() {
+  console.log("Starting session...");
   sessionStartTime = Date.now();
 
   // Connect WebSocket
   connectWebSocket();
 
-  // Start capture loop
-  captureAndSend(); // Immediate first capture
+  // Start capture loop (first capture is sent after WS connects)
   captureInterval = setInterval(captureAndSend, CAPTURE_INTERVAL_MS);
 
   // Start timer
@@ -119,17 +160,16 @@ function startSession() {
   // Update UI
   document.getElementById("btn-start").style.display = "none";
   document.getElementById("btn-end").style.display = "block";
-  document.getElementById("empty-state").querySelector("p").textContent = "Watching your screen...";
-  setStatus("Watching your screen...", true);
+  unansweredCount = 0;
 }
 
 async function endSession() {
   // Stop capture & timer
-  if (captureInterval) clearInterval(captureInterval);
-  if (timerInterval) clearInterval(timerInterval);
+  if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
   // Close WebSocket
-  if (ws) ws.close();
+  if (ws) { ws.close(); ws = null; }
 
   setStatus("Session ended", false);
 
@@ -168,6 +208,7 @@ function displayQuestions(questions, topic) {
 
   questions.forEach((q) => {
     totalQuestions++;
+    unansweredCount++;
     updateScore();
 
     const card = document.createElement("div");
@@ -190,7 +231,7 @@ function displayQuestions(questions, topic) {
     } else {
       answersHTML = `
         <textarea class="answer-input" id="input-${q.id}"
-                  placeholder="Type your answer..." oninput="onAnswerStart()"></textarea>
+                  placeholder="Type your answer..."></textarea>
         <button class="btn-submit"
                 onclick="submitText('${q.id}', '${escapeJS(q.question)}', '${escapeJS(q.correct_answer)}', '${escapeJS(topic)}')">
           Submit Answer
@@ -206,7 +247,15 @@ function displayQuestions(questions, topic) {
       <div id="feedback-${q.id}"></div>
     `;
 
-    container.insertBefore(card, container.firstChild);
+    // Add conversational intro before the first question
+    if (container.children.length === 0 || !container.querySelector('.chat-bubble')) {
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      bubble.innerHTML = `🤓 I see you're studying <strong>${topic}</strong>! Let me quiz you...`;
+      container.insertBefore(bubble, container.firstChild);
+    }
+
+    container.insertBefore(card, container.querySelector('.chat-bubble') ? container.querySelector('.chat-bubble').nextSibling : container.firstChild);
   });
 
   // Scroll to top to see newest question
@@ -227,8 +276,6 @@ function selectChoice(btn, qid) {
 
   // Enable submit
   document.getElementById(`submit-${qid}`).disabled = false;
-
-  onAnswerStart();
 }
 
 async function submitMCQ(qid, correctAnswer, topic) {
@@ -268,6 +315,7 @@ async function submitMCQ(qid, correctAnswer, topic) {
   // Get AI feedback
   const questionText = card.querySelector(".question-text").textContent;
   await getAIFeedback(qid, questionText, correctAnswer, userAnswer, topic, isCorrect);
+  questionAnswered();
 }
 
 async function submitText(qid, question, correctAnswer, topic) {
@@ -280,6 +328,7 @@ async function submitText(qid, question, correctAnswer, topic) {
   card.querySelector(".btn-submit").disabled = true;
 
   await getAIFeedback(qid, question, correctAnswer, userAnswer, topic);
+  questionAnswered();
 }
 
 async function getAIFeedback(qid, question, correctAnswer, userAnswer, topic, knownCorrect = null) {
@@ -426,6 +475,20 @@ function escapeJS(str) {
   return (str || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
-function onAnswerStart() {
-  invoke("hide_annotation").catch(() => { });
+function questionAnswered() {
+  unansweredCount = Math.max(0, unansweredCount - 1);
+  if (unansweredCount === 0) {
+    setStatus("\u{1F44D} All caught up! Scanning for more...", true);
+  }
+}
+
+function showGreeting() {
+  const container = document.getElementById("questions-container");
+  const emptyState = document.getElementById("empty-state");
+  if (emptyState) emptyState.remove();
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.innerHTML = `\u{1F44B} <strong>Hey! I'm DeskMate.</strong><br>I'll watch what you're studying and quiz you to help you learn better. Just keep reading \u2014 I'll ask when I spot something interesting!`;
+  container.appendChild(bubble);
 }
