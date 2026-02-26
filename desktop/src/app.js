@@ -9,8 +9,8 @@ const { invoke } = window.__TAURI__.core;
 // Configuration
 // ===========================
 
-const BACKEND_WS_URL = "ws://localhost:8080/ws/study-session";
-const BACKEND_API_URL = "http://localhost:8080/api";
+const BACKEND_WS_URL = "wss://deskmate-backend-93867190499.us-central1.run.app/ws/study-session";
+const BACKEND_API_URL = "https://deskmate-backend-93867190499.us-central1.run.app/api";
 const CAPTURE_INTERVAL_MS = 10000; // 10 seconds
 
 // ===========================
@@ -427,5 +427,5 @@ function escapeJS(str) {
 }
 
 function onAnswerStart() {
-  invoke("hide_annotation").catch(() => {});
+  invoke("hide_annotation").catch(() => { });
 }
