@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeskMate — AI Study Coach</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- Header -->
+  <header id="app-header">
+    <div class="header-left">
+      <span class="logo">🎓</span>
+      <h1>DeskMate</h1>
+    </div>
+    <div class="header-right">
+      <span id="session-timer" class="timer">00:00</span>
+    </div>
+  </header>
+
+  <!-- Status Bar -->
+  <div id="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Ready to start</span>
+  </div>
+
+  <!-- Score Tracker -->
+  <div id="score-tracker">
+    <div class="score-display">
+      <span class="score-label">Score</span>
+      <span id="score-value" class="score-value">0 / 0</span>
+    </div>
+    <div class="score-bar-container">
+      <div id="score-bar" class="score-bar" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- Questions Container -->
+  <div id="questions-container">
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">👀</div>
+      <p>Watching your screen...</p>
+      <p class="empty-sub">Open study material and DeskMate will generate questions automatically</p>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <button id="btn-start" class="btn btn-primary" onclick="startSession()">
+      ▶ Start Session
+    </button>
+    <button id="btn-end" class="btn btn-danger" onclick="endSession()" style="display:none;">
+      ⏹ End Session
+    </button>
+  </div>
+
+  <!-- Summary Modal -->
+  <div id="summary-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h2>📊 Session Summary</h2>
+      <div id="summary-body"></div>
+      <button class="btn btn-primary" onclick="closeSummary()">Close</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

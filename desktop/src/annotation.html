@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            overflow: hidden;
+            pointer-events: none;
+            /* click-through */
+        }
+
+        .highlight-box {
+            position: absolute;
+            border: 3px solid #e94560;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.6), inset 0 0 20px rgba(233, 69, 96, 0.1);
+            animation: pulse 1.5s ease-in-out infinite;
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .highlight-box.visible {
+            display: block;
+        }
+
+        .tooltip {
+            position: absolute;
+            top: -36px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e94560;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(233, 69, 96, 0.4);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(233, 69, 96, 0.6);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(233, 69, 96, 0.9);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="highlight-box" id="highlight">
+        <div class="tooltip" id="tooltip">📌 This concept is being tested!</div>
+    </div>
+
+    <script>
+        // 3x3 grid region mapping
+        const REGIONS = {
+            "top-left": { top: "0%", left: "0%", width: "33%", height: "33%" },
+            "top-center": { top: "0%", left: "33%", width: "34%", height: "33%" },
+            "top-right": { top: "0%", left: "67%", width: "33%", height: "33%" },
+            "middle-left": { top: "33%", left: "0%", width: "33%", height: "34%" },
+            "middle-center": { top: "33%", left: "33%", width: "34%", height: "34%" },
+            "middle-right": { top: "33%", left: "67%", width: "33%", height: "34%" },
+            "bottom-left": { top: "67%", left: "0%", width: "33%", height: "33%" },
+            "bottom-center": { top: "67%", left: "33%", width: "34%", height: "33%" },
+            "bottom-right": { top: "67%", left: "67%", width: "33%", height: "33%" },
+        };
+
+        function showAnnotation(region, label) {
+            const box = document.getElementById("highlight");
+            const tip = document.getElementById("tooltip");
+            const pos = REGIONS[region] || REGIONS["middle-center"];
+
+            Object.assign(box.style, pos);
+            tip.textContent = label || "📌 This concept is being tested!";
+            box.classList.add("visible");
+
+            // Auto-hide after 8 seconds
+            setTimeout(hideAnnotation, 8000);
+        }
+
+        function hideAnnotation() {
+            document.getElementById("highlight").classList.remove("visible");
+        }
+    </script>
+</body>
+
+</html>
