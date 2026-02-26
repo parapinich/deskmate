@@ -4,8 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.deskmate.app",
   "build": {
-    "frontendDist": "../src",
-    "devUrl": "http://localhost:1420"
+    "frontendDist": "../src"
   },
   "app": {
     "windows": [
@@ -26,16 +25,7 @@
   },
   "plugins": {
     "shell": {
-      "sidecar": true,
-      "scope": [
-        {
-          "name": "capture",
-          "cmd": "python",
-          "args": [
-            "../../screencapture/capture.py"
-          ]
-        }
-      ]
+      "open": true
     }
   },
   "bundle": {

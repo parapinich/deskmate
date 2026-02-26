@@ -8,7 +8,6 @@ mod annotation_window;
 
 use annotation_window::{create_annotation_window, hide_annotation, show_annotation};
 use std::process::Command;
-use tauri::Manager;
 
 /// Tauri command: call the Python sidecar to capture a screenshot.
 /// Returns the JSON string with base64 screenshot data.
