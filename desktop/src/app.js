@@ -33,6 +33,8 @@ let correctAnswers = 0;
 let currentTopic = "";
 let unansweredCount = 0;
 let panelExpanded = false;
+let historyExpanded = false;
+let answeredHistory = [];
 
 // ===========================
 // Tauri API
@@ -242,6 +244,7 @@ async function endSession() {
 
 async function showQuestionsPanel() {
   panelExpanded = true;
+  if (historyExpanded) await hideHistoryPanel();
   document.getElementById("questions-panel").classList.add("expanded");
   document.getElementById("btn-toggle").classList.add("expanded");
   await expandBar();
@@ -260,6 +263,50 @@ async function toggleQuestions() {
   } else {
     await showQuestionsPanel();
   }
+}
+
+// History Panel
+async function showHistoryPanel() {
+  historyExpanded = true;
+  if (panelExpanded) {
+    document.getElementById("questions-panel").classList.remove("expanded");
+    panelExpanded = false;
+  }
+  renderHistory();
+  document.getElementById("history-panel").classList.add("expanded");
+  await expandBar();
+}
+
+async function hideHistoryPanel() {
+  historyExpanded = false;
+  document.getElementById("history-panel").classList.remove("expanded");
+  await collapseBar();
+}
+
+async function toggleHistory() {
+  if (historyExpanded) {
+    await hideHistoryPanel();
+  } else {
+    await showHistoryPanel();
+  }
+}
+
+function renderHistory() {
+  const container = document.getElementById("history-container");
+  if (answeredHistory.length === 0) {
+    container.innerHTML = '<div class="chat-bubble">No answered questions yet.</div>';
+    return;
+  }
+  container.innerHTML = answeredHistory.map(item => `
+    <div class="question-card" style="opacity: 0.85;">
+      <div class="question-topic">${item.topic}</div>
+      <div class="question-text">${item.question}</div>
+      <div class="feedback ${item.isCorrect ? 'correct' : 'wrong'}">
+        <div class="feedback-title">${item.isCorrect ? '✅' : '❌'} ${item.userAnswer}</div>
+        <div>${item.feedback}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ===========================
@@ -345,7 +392,8 @@ async function submitMCQ(qid, correctAnswer, topic) {
   updateScore();
 
   const questionText = card.querySelector(".question-text").textContent;
-  await getAIFeedback(qid, questionText, correctAnswer, userAnswer, topic, isCorrect);
+  const feedback = await getAIFeedback(qid, questionText, correctAnswer, userAnswer, topic, isCorrect);
+  setTimeout(() => moveToHistory(qid, questionText, topic, userAnswer, isCorrect, feedback), 2000);
   questionAnswered();
 }
 
@@ -357,13 +405,15 @@ async function submitText(qid, question, correctAnswer, topic) {
   input.disabled = true;
   document.getElementById(`q-${qid}`).querySelector(".btn-submit").disabled = true;
 
-  await getAIFeedback(qid, question, correctAnswer, userAnswer, topic);
+  const feedback = await getAIFeedback(qid, question, correctAnswer, userAnswer, topic);
+  setTimeout(() => moveToHistory(qid, question, topic, userAnswer, null, feedback), 2000);
   questionAnswered();
 }
 
 async function getAIFeedback(qid, question, correctAnswer, userAnswer, topic, knownCorrect = null) {
   const feedbackEl = document.getElementById(`feedback-${qid}`);
   feedbackEl.innerHTML = '<div class="feedback" style="color: var(--text-muted);">Evaluating...</div>';
+  let feedbackText = "";
 
   try {
     const response = await fetch(`${BACKEND_API_URL}/answer`, {
@@ -377,6 +427,7 @@ async function getAIFeedback(qid, question, correctAnswer, userAnswer, topic, kn
 
     if (knownCorrect === null && isCorrect) { correctAnswers++; updateScore(); }
 
+    feedbackText = result.feedback || "";
     feedbackEl.innerHTML = `
       <div class="feedback ${isCorrect ? 'correct' : 'wrong'}">
         <div class="feedback-title">${isCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
@@ -389,6 +440,7 @@ async function getAIFeedback(qid, question, correctAnswer, userAnswer, topic, kn
       <div class="feedback-title">${knownCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
     </div>`;
   }
+  return feedbackText;
 }
 
 // ===========================
@@ -461,6 +513,18 @@ function questionAnswered() {
         await hideQuestionsPanel();
       }
     }, 3000);
+  }
+}
+
+function moveToHistory(qid, question, topic, userAnswer, isCorrect, feedback) {
+  answeredHistory.unshift({ qid, question, topic, userAnswer, isCorrect, feedback });
+  document.getElementById('btn-history').classList.add('has-items');
+  const card = document.getElementById(`q-${qid}`);
+  if (card) {
+    card.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(30px)';
+    setTimeout(() => card.remove(), 400);
   }
 }
 

@@ -3,20 +3,21 @@
    =========================== */
 
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-card: #1f2940;
-  --bg-card-hover: #253350;
-  --accent: #e94560;
-  --accent-glow: rgba(233, 69, 96, 0.3);
-  --success: #4ecca3;
-  --success-glow: rgba(78, 204, 163, 0.2);
-  --error: #e94560;
-  --error-glow: rgba(233, 69, 96, 0.2);
-  --text-primary: #eaeaea;
-  --text-secondary: #a0a0b8;
-  --text-muted: #6c6c80;
-  --border: #2a2a45;
+  --bg-primary: #0f0f1a;
+  --bg-secondary: #161625;
+  --bg-card: #1e1e32;
+  --bg-card-hover: #26263f;
+  --accent: #8B5CF6;
+  --accent-glow: rgba(139, 92, 246, 0.25);
+  --accent-light: #A78BFA;
+  --success: #34D399;
+  --success-glow: rgba(52, 211, 153, 0.2);
+  --error: #F87171;
+  --error-glow: rgba(248, 113, 113, 0.2);
+  --text-primary: #F1F0F8;
+  --text-secondary: #9B96B0;
+  --text-muted: #5E5A73;
+  --border: #2d2b42;
   --radius: 12px;
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -27,11 +28,14 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: transparent;
   color: var(--text-primary);
   overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 /* ===========================
@@ -56,6 +60,7 @@ body {
   justify-content: space-between;
   padding: 14px 18px;
   background: var(--bg-secondary);
+  border-radius: 16px 16px 0 0;
   cursor: grab;
 }
 
@@ -72,7 +77,7 @@ body {
 .card-brand {
   font-size: 16px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), #ff6b8a);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -94,7 +99,7 @@ body {
 }
 
 .card-close:hover {
-  background: #d63050;
+  background: #7C3AED;
   transform: scale(1.1);
 }
 
@@ -127,7 +132,7 @@ body {
   width: 100%;
   max-width: 280px;
   padding: 14px 24px;
-  background: linear-gradient(135deg, var(--accent), #ff6b8a);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
   border: none;
   border-radius: var(--radius);
   font-size: 16px;
@@ -261,6 +266,37 @@ body {
 
 .toolbar-btn-end:hover {
   background: var(--error-glow);
+}
+
+.toolbar-btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  position: relative;
+}
+
+.toolbar-btn-icon:hover {
+  background: var(--bg-card);
+  border-color: var(--accent);
+}
+
+.toolbar-btn-icon.has-items::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .toolbar-btn-toggle {
@@ -494,7 +530,7 @@ body {
 }
 
 .btn-submit:hover {
-  background: #d63050;
+  background: #7C3AED;
   transform: translateY(-1px);
 }
 

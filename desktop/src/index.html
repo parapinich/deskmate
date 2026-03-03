@@ -45,6 +45,7 @@
       </div>
       <div class="toolbar-right">
         <span class="toolbar-score" id="toolbar-score">0/0</span>
+        <button class="toolbar-btn-icon" id="btn-history" onclick="toggleHistory()" title="Answer History">📋</button>
         <span class="toolbar-timer" id="session-timer">00:00</span>
         <button class="toolbar-btn-end" onclick="endSession()">⏹</button>
         <div class="toolbar-drag-handle" onmousedown="startDrag(event)" title="Drag to move">✥</div>
@@ -55,6 +56,11 @@
     <!-- Questions Panel (extends downward) -->
     <div id="questions-panel" class="questions-panel">
       <div id="questions-container"></div>
+    </div>
+
+    <!-- History Panel -->
+    <div id="history-panel" class="questions-panel">
+      <div id="history-container"></div>
     </div>
   </div>
 
