@@ -11,12 +11,12 @@
       {
         "title": "DeskMate",
         "width": 420,
-        "height": 900,
-        "resizable": true,
+        "height": 500,
+        "resizable": false,
         "alwaysOnTop": true,
-        "decorations": true,
-        "x": 1500,
-        "y": 0
+        "decorations": false,
+        "center": true,
+        "transparent": true
       }
     ],
     "security": {

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,63 +8,66 @@
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
+
 <body>
-  <!-- Header -->
-  <header id="app-header">
-    <div class="header-left">
-      <span class="logo">🎓</span>
-      <h1>DeskMate</h1>
-    </div>
-    <div class="header-right">
-      <span id="session-timer" class="timer">00:00</span>
-    </div>
-  </header>
 
-  <!-- Status Bar -->
-  <div id="status-bar">
-    <div class="status-dot" id="status-dot"></div>
-    <span id="status-text">Ready to start</span>
-  </div>
-
-  <!-- Score Tracker -->
-  <div id="score-tracker">
-    <div class="score-display">
-      <span class="score-label">Score</span>
-      <span id="score-value" class="score-value">0 / 0</span>
+  <!-- ============ CARD VIEW (initial) ============ -->
+  <div id="card-view" class="card-view">
+    <!-- Custom title bar for dragging -->
+    <div class="card-titlebar" data-tauri-drag-region>
+      <div class="card-titlebar-left">
+        <span class="card-logo">🎓</span>
+        <span class="card-brand">DeskMate</span>
+      </div>
+      <button class="card-close" onclick="closeApp()">✕</button>
     </div>
-    <div class="score-bar-container">
-      <div id="score-bar" class="score-bar" style="width: 0%"></div>
+
+    <div class="card-body">
+      <h2 class="card-title">Start a Study Session</h2>
+      <p class="card-desc">I'll watch your screen and quiz you on what you're studying. Just open your study material
+        and let me help! 📚</p>
+      <button id="btn-start" class="card-btn" onclick="startSession()">
+        ▶ Start Session
+      </button>
     </div>
   </div>
 
-  <!-- Questions Container -->
-  <div id="questions-container">
-    <div id="empty-state" class="empty-state">
-      <div class="empty-icon">👀</div>
-      <p>Watching your screen...</p>
-      <p class="empty-sub">Open study material and DeskMate will generate questions automatically</p>
+  <!-- ============ BAR VIEW (active session) ============ -->
+  <div id="bar-view" class="bar-view" style="display:none;">
+    <!-- Toolbar -->
+    <div class="toolbar" data-tauri-drag-region>
+      <div class="toolbar-left">
+        <span class="toolbar-logo">🎓</span>
+        <div class="toolbar-status">
+          <div class="status-dot" id="status-dot"></div>
+          <span id="status-text" class="toolbar-status-text">Watching...</span>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <span class="toolbar-score" id="toolbar-score">0/0</span>
+        <span class="toolbar-timer" id="session-timer">00:00</span>
+        <button class="toolbar-btn-end" onclick="endSession()">⏹</button>
+        <div class="toolbar-drag-handle" onmousedown="startDrag(event)" title="Drag to move">✥</div>
+        <button class="toolbar-btn-toggle" id="btn-toggle" onclick="toggleQuestions()">▼</button>
+      </div>
+    </div>
+
+    <!-- Questions Panel (extends downward) -->
+    <div id="questions-panel" class="questions-panel">
+      <div id="questions-container"></div>
     </div>
   </div>
 
-  <!-- Controls -->
-  <div id="controls">
-    <button id="btn-start" class="btn btn-primary" onclick="startSession()">
-      ▶ Start Session
-    </button>
-    <button id="btn-end" class="btn btn-danger" onclick="endSession()" style="display:none;">
-      ⏹ End Session
-    </button>
-  </div>
-
-  <!-- Summary Modal -->
+  <!-- ============ SUMMARY MODAL ============ -->
   <div id="summary-modal" class="modal" style="display:none;">
     <div class="modal-content">
       <h2>📊 Session Summary</h2>
       <div id="summary-body"></div>
-      <button class="btn btn-primary" onclick="closeSummary()">Close</button>
+      <button class="card-btn" onclick="closeSummary()">Close</button>
     </div>
   </div>
 
   <script src="app.js"></script>
 </body>
+
 </html>

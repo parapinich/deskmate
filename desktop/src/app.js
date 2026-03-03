@@ -1,6 +1,6 @@
 /**
  * DeskMate — Frontend Application Logic
- * WebSocket client + UI logic for the Tauri desktop app.
+ * Card popup → Floating toolbar bar → Expandable questions panel
  */
 
 // ===========================
@@ -9,7 +9,15 @@
 
 const BACKEND_WS_URL = "ws://localhost:8080/ws/study-session";
 const BACKEND_API_URL = "http://localhost:8080/api";
-const CAPTURE_INTERVAL_MS = 30000; // 30 seconds — gives time to answer
+const CAPTURE_INTERVAL_MS = 30000;
+
+// Window sizes
+const CARD_WIDTH = 420;
+const CARD_HEIGHT = 500;
+const BAR_WIDTH = 650;
+const BAR_HEIGHT = 48;
+const BAR_EXPANDED_HEIGHT = 550;
+const BAR_Y_OFFSET = 8; // Padding from top edge
 
 // ===========================
 // State
@@ -23,19 +31,18 @@ let sessionStartTime = null;
 let totalQuestions = 0;
 let correctAnswers = 0;
 let currentTopic = "";
-let unansweredCount = 0; // Track unanswered questions to pause capture
+let unansweredCount = 0;
+let panelExpanded = false;
 
 // ===========================
-// Tauri API (lazy load)
+// Tauri API
 // ===========================
 
 async function tauriInvoke(cmd, args) {
   try {
-    // Tauri v2 internal invoke — always available in Tauri webview
     if (window.__TAURI_INTERNALS__) {
       return await window.__TAURI_INTERNALS__.invoke(cmd, args || {});
     }
-    // Fallback: Tauri v2 global API
     if (window.__TAURI__ && window.__TAURI__.core) {
       return await window.__TAURI__.core.invoke(cmd, args || {});
     }
@@ -44,6 +51,55 @@ async function tauriInvoke(cmd, args) {
     console.error("Tauri invoke error:", cmd, err);
   }
   return null;
+}
+
+// ===========================
+// Window Management
+// ===========================
+
+async function switchToBar() {
+  // Get screen center for bar positioning
+  const screenW = window.screen.availWidth;
+  const x = Math.round((screenW - BAR_WIDTH) / 2);
+  await tauriInvoke("resize_window", {
+    width: BAR_WIDTH,
+    height: BAR_HEIGHT,
+    x: x,
+    y: BAR_Y_OFFSET
+  });
+}
+
+async function expandBar() {
+  const screenW = window.screen.availWidth;
+  const x = Math.round((screenW - BAR_WIDTH) / 2);
+  await tauriInvoke("resize_window", {
+    width: BAR_WIDTH,
+    height: BAR_EXPANDED_HEIGHT,
+    x: x,
+    y: BAR_Y_OFFSET
+  });
+}
+
+async function collapseBar() {
+  const screenW = window.screen.availWidth;
+  const x = Math.round((screenW - BAR_WIDTH) / 2);
+  await tauriInvoke("resize_window", {
+    width: BAR_WIDTH,
+    height: BAR_HEIGHT,
+    x: x,
+    y: BAR_Y_OFFSET
+  });
+}
+
+async function switchToCard() {
+  const screenW = window.screen.availWidth;
+  const screenH = window.screen.availHeight;
+  await tauriInvoke("resize_window", {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    x: Math.round((screenW - CARD_WIDTH) / 2),
+    y: Math.round((screenH - CARD_HEIGHT) / 2)
+  });
 }
 
 // ===========================
@@ -57,9 +113,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.log("WebSocket connected!");
-    setStatus("👋 Hey! I'm watching your screen...", true);
-    showGreeting();
-    // Send first capture after a short delay
+    setStatus("Watching your screen...", true);
     setTimeout(captureAndSend, 2000);
   };
 
@@ -69,35 +123,33 @@ function connectWebSocket() {
 
       if (data.error) {
         console.error("Server error:", data.error);
-        setStatus("⚠ Server error", false);
+        setStatus("⚠ Error", false);
         return;
       }
 
-      if (data.skipped) {
-        // Duplicate screenshot — no new questions
-        return;
-      }
+      if (data.skipped) return;
 
       if (data.is_study_material && data.questions && data.questions.length > 0) {
         currentTopic = data.topic || "";
-        setStatus(`📚 ${data.topic} — ${data.difficulty}`, true);
+        setStatus(`📚 ${data.topic}`, true);
         displayQuestions(data.questions, data.topic);
+
+        // Auto-expand panel and resize window
+        if (!panelExpanded) {
+          showQuestionsPanel();
+        }
       } else if (data.is_study_material === false && !data.skipped) {
-        setStatus("👀 No study material detected — watching...", true);
+        setStatus("👀 Watching...", true);
       }
     } catch (err) {
       console.error("Failed to parse message:", err);
     }
   };
 
-  ws.onerror = (err) => {
-    console.error("WebSocket error:", err);
-    setStatus("⚠ Connection error", false);
-  };
+  ws.onerror = () => setStatus("⚠ Error", false);
 
   ws.onclose = () => {
     if (captureInterval) {
-      // Only reconnect if session is active
       setStatus("Reconnecting...", false);
       setTimeout(connectWebSocket, 3000);
     }
@@ -109,34 +161,27 @@ function connectWebSocket() {
 // ===========================
 
 async function captureAndSend() {
-  // Pause capture if there are unanswered questions
-  if (unansweredCount > 0) {
-    console.log(`Pausing capture — ${unansweredCount} unanswered question(s)`);
-    return;
-  }
+  if (unansweredCount > 0) return;
 
   try {
-    setStatus("📸 Scanning your screen...", true);
+    setStatus("📸 Scanning...", true);
     const result = await tauriInvoke("take_screenshot");
     if (!result) {
-      console.warn("Screenshot returned empty");
-      setStatus("👀 Watching your screen...", true);
+      setStatus("👀 Watching...", true);
       return;
     }
 
     const parsed = JSON.parse(result);
-
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         screenshot: parsed.screenshot,
         session_id: sessionId
       }));
-      console.log("Screenshot sent to server");
-      setStatus("🧠 Analyzing what you're studying...", true);
+      setStatus("🧠 Analyzing...", true);
     }
   } catch (err) {
     console.error("Capture failed:", err);
-    setStatus("👀 Watching your screen...", true);
+    setStatus("👀 Watching...", true);
   }
 }
 
@@ -144,42 +189,36 @@ async function captureAndSend() {
 // Session Controls
 // ===========================
 
-function startSession() {
-  console.log("Starting session...");
+async function startSession() {
   sessionStartTime = Date.now();
 
-  // Connect WebSocket
+  // Switch UI: card → bar
+  document.getElementById("card-view").style.display = "none";
+  document.getElementById("bar-view").style.display = "flex";
+
+  // Resize window to toolbar
+  await switchToBar();
+
+  // Connect and start
   connectWebSocket();
-
-  // Start capture loop (first capture is sent after WS connects)
   captureInterval = setInterval(captureAndSend, CAPTURE_INTERVAL_MS);
-
-  // Start timer
   timerInterval = setInterval(updateTimer, 1000);
-
-  // Update UI
-  document.getElementById("btn-start").style.display = "none";
-  document.getElementById("btn-end").style.display = "block";
   unansweredCount = 0;
 }
 
 async function endSession() {
-  // Stop capture & timer
   if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-
-  // Close WebSocket
   if (ws) { ws.close(); ws = null; }
 
   setStatus("Session ended", false);
 
-  // Fetch summary from backend
+  // Fetch summary
   try {
     const response = await fetch(`${BACKEND_API_URL}/summary/${sessionId}`);
     const summary = await response.json();
     displaySummary(summary);
   } catch (err) {
-    console.error("Failed to fetch summary:", err);
     displaySummary({
       topics: [currentTopic || "N/A"],
       total_questions: totalQuestions,
@@ -190,9 +229,37 @@ async function endSession() {
     });
   }
 
-  // Update UI
-  document.getElementById("btn-end").style.display = "none";
-  document.getElementById("btn-start").style.display = "block";
+  // Switch back to card view
+  hideQuestionsPanel();
+  document.getElementById("bar-view").style.display = "none";
+  document.getElementById("card-view").style.display = "flex";
+  await switchToCard();
+}
+
+// ===========================
+// Questions Panel Toggle
+// ===========================
+
+async function showQuestionsPanel() {
+  panelExpanded = true;
+  document.getElementById("questions-panel").classList.add("expanded");
+  document.getElementById("btn-toggle").classList.add("expanded");
+  await expandBar();
+}
+
+async function hideQuestionsPanel() {
+  panelExpanded = false;
+  document.getElementById("questions-panel").classList.remove("expanded");
+  document.getElementById("btn-toggle").classList.remove("expanded");
+  await collapseBar();
+}
+
+async function toggleQuestions() {
+  if (panelExpanded) {
+    await hideQuestionsPanel();
+  } else {
+    await showQuestionsPanel();
+  }
 }
 
 // ===========================
@@ -201,10 +268,6 @@ async function endSession() {
 
 function displayQuestions(questions, topic) {
   const container = document.getElementById("questions-container");
-
-  // Remove empty state
-  const emptyState = document.getElementById("empty-state");
-  if (emptyState) emptyState.remove();
 
   questions.forEach((q) => {
     totalQuestions++;
@@ -220,21 +283,20 @@ function displayQuestions(questions, topic) {
     if (q.type === "multiple_choice" && q.choices) {
       answersHTML = `
         <div class="choices">
-          ${q.choices.map((choice, i) => `
+          ${q.choices.map((choice) => `
             <button class="choice-btn" data-qid="${q.id}" data-choice="${choice}"
                     onclick="selectChoice(this, '${q.id}')">${choice}</button>
           `).join("")}
         </div>
         <button class="btn-submit" onclick="submitMCQ('${q.id}', '${escapeJS(q.correct_answer)}', '${escapeJS(topic)}')"
-                id="submit-${q.id}" disabled>Submit Answer</button>
+                id="submit-${q.id}" disabled>Submit</button>
       `;
     } else {
       answersHTML = `
-        <textarea class="answer-input" id="input-${q.id}"
-                  placeholder="Type your answer..."></textarea>
+        <textarea class="answer-input" id="input-${q.id}" placeholder="Type your answer..."></textarea>
         <button class="btn-submit"
                 onclick="submitText('${q.id}', '${escapeJS(q.question)}', '${escapeJS(q.correct_answer)}', '${escapeJS(topic)}')">
-          Submit Answer
+          Submit
         </button>
       `;
     }
@@ -247,34 +309,18 @@ function displayQuestions(questions, topic) {
       <div id="feedback-${q.id}"></div>
     `;
 
-    // Add conversational intro before the first question
-    if (container.children.length === 0 || !container.querySelector('.chat-bubble')) {
-      const bubble = document.createElement('div');
-      bubble.className = 'chat-bubble';
-      bubble.innerHTML = `🤓 I see you're studying <strong>${topic}</strong>! Let me quiz you...`;
-      container.insertBefore(bubble, container.firstChild);
-    }
-
-    container.insertBefore(card, container.querySelector('.chat-bubble') ? container.querySelector('.chat-bubble').nextSibling : container.firstChild);
+    container.insertBefore(card, container.firstChild);
   });
-
-  // Scroll to top to see newest question
-  container.scrollTop = 0;
 }
 
 // ===========================
-// UI — Answer Handling
+// Answer Handling
 // ===========================
 
 function selectChoice(btn, qid) {
-  // Deselect all in this question
   const card = document.getElementById(`q-${qid}`);
   card.querySelectorAll(".choice-btn").forEach((b) => b.classList.remove("selected"));
-
-  // Select this one
   btn.classList.add("selected");
-
-  // Enable submit
   document.getElementById(`submit-${qid}`).disabled = false;
 }
 
@@ -284,35 +330,20 @@ async function submitMCQ(qid, correctAnswer, topic) {
   if (!selected) return;
 
   const userAnswer = selected.dataset.choice;
-
-  // Disable all choices
-  card.querySelectorAll(".choice-btn").forEach((b) => {
-    b.disabled = true;
-    b.style.cursor = "default";
-  });
+  card.querySelectorAll(".choice-btn").forEach((b) => { b.disabled = true; b.style.cursor = "default"; });
   card.querySelector(".btn-submit").disabled = true;
 
-  // Check answer (simple prefix match for MCQ)
   const correctLetter = correctAnswer.charAt(0).toUpperCase();
   const userLetter = userAnswer.charAt(0).toUpperCase();
   const isCorrect = correctLetter === userLetter;
 
-  // Highlight correct/wrong
   card.querySelectorAll(".choice-btn").forEach((b) => {
-    if (b.dataset.choice.charAt(0).toUpperCase() === correctLetter) {
-      b.classList.add("correct");
-    }
+    if (b.dataset.choice.charAt(0).toUpperCase() === correctLetter) b.classList.add("correct");
   });
 
-  if (!isCorrect) {
-    selected.classList.add("wrong");
-  } else {
-    correctAnswers++;
-  }
-
+  if (!isCorrect) { selected.classList.add("wrong"); } else { correctAnswers++; }
   updateScore();
 
-  // Get AI feedback
   const questionText = card.querySelector(".question-text").textContent;
   await getAIFeedback(qid, questionText, correctAnswer, userAnswer, topic, isCorrect);
   questionAnswered();
@@ -324,8 +355,7 @@ async function submitText(qid, question, correctAnswer, topic) {
   if (!userAnswer) return;
 
   input.disabled = true;
-  const card = document.getElementById(`q-${qid}`);
-  card.querySelector(".btn-submit").disabled = true;
+  document.getElementById(`q-${qid}`).querySelector(".btn-submit").disabled = true;
 
   await getAIFeedback(qid, question, correctAnswer, userAnswer, topic);
   questionAnswered();
@@ -339,48 +369,30 @@ async function getAIFeedback(qid, question, correctAnswer, userAnswer, topic, kn
     const response = await fetch(`${BACKEND_API_URL}/answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: sessionId,
-        question_id: qid,
-        question,
-        correct_answer: correctAnswer,
-        user_answer: userAnswer,
-        topic
-      })
+      body: JSON.stringify({ session_id: sessionId, question_id: qid, question, correct_answer: correctAnswer, user_answer: userAnswer, topic })
     });
 
     const result = await response.json();
     const isCorrect = knownCorrect !== null ? knownCorrect : result.is_correct;
 
-    if (knownCorrect === null && isCorrect) {
-      correctAnswers++;
-      updateScore();
-    }
+    if (knownCorrect === null && isCorrect) { correctAnswers++; updateScore(); }
 
-    displayFeedback(qid, isCorrect, result.feedback, result.hint_for_improvement);
-  } catch (err) {
     feedbackEl.innerHTML = `
-      <div class="feedback ${knownCorrect ? 'correct' : 'wrong'}">
-        <div class="feedback-title">${knownCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
-        <div>Correct answer: ${correctAnswer}</div>
+      <div class="feedback ${isCorrect ? 'correct' : 'wrong'}">
+        <div class="feedback-title">${isCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
+        <div>${result.feedback}</div>
+        ${result.hint_for_improvement ? `<div class="feedback-hint">💡 ${result.hint_for_improvement}</div>` : ""}
       </div>
     `;
+  } catch (err) {
+    feedbackEl.innerHTML = `<div class="feedback ${knownCorrect ? 'correct' : 'wrong'}">
+      <div class="feedback-title">${knownCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
+    </div>`;
   }
 }
 
-function displayFeedback(qid, isCorrect, feedback, hint) {
-  const feedbackEl = document.getElementById(`feedback-${qid}`);
-  feedbackEl.innerHTML = `
-    <div class="feedback ${isCorrect ? 'correct' : 'wrong'}">
-      <div class="feedback-title">${isCorrect ? '✅ Correct!' : '❌ Not quite'}</div>
-      <div>${feedback}</div>
-      ${hint ? `<div class="feedback-hint">💡 ${hint}</div>` : ""}
-    </div>
-  `;
-}
-
 // ===========================
-// UI — Summary
+// Summary
 // ===========================
 
 function displaySummary(summary) {
@@ -390,44 +402,12 @@ function displaySummary(summary) {
   const duration = formatDuration(summary.duration_seconds || 0);
   const topics = (summary.topics || []).join(", ") || "N/A";
 
-  let weakAreasHTML = "";
-  if (summary.weak_areas && summary.weak_areas.length > 0) {
-    weakAreasHTML = `
-      <div class="weak-areas">
-        <p style="font-size:12px; color:var(--text-muted); margin-bottom:8px; font-weight:600;">WEAK AREAS</p>
-        ${summary.weak_areas.map(w => `
-          <div class="weak-area-item">
-            <span class="weak-area-topic">${w.topic}</span> — ${w.score_percent}%
-          </div>
-        `).join("")}
-      </div>
-    `;
-  }
-
   body.innerHTML = `
-    <div class="summary-item">
-      <span class="summary-label">Duration</span>
-      <span class="summary-value">${duration}</span>
-    </div>
-    <div class="summary-item">
-      <span class="summary-label">Topics</span>
-      <span class="summary-value">${topics}</span>
-    </div>
-    <div class="summary-item">
-      <span class="summary-label">Questions</span>
-      <span class="summary-value">${summary.total_questions || 0}</span>
-    </div>
-    <div class="summary-item">
-      <span class="summary-label">Correct</span>
-      <span class="summary-value">${summary.correct_answers || 0}</span>
-    </div>
-    <div class="summary-item">
-      <span class="summary-label">Score</span>
-      <span class="summary-value" style="color: ${(summary.score_percent || 0) >= 70 ? 'var(--success)' : 'var(--error)'}">
-        ${summary.score_percent || 0}%
-      </span>
-    </div>
-    ${weakAreasHTML}
+    <div class="summary-item"><span class="summary-label">Duration</span><span class="summary-value">${duration}</span></div>
+    <div class="summary-item"><span class="summary-label">Topics</span><span class="summary-value">${topics}</span></div>
+    <div class="summary-item"><span class="summary-label">Questions</span><span class="summary-value">${summary.total_questions || 0}</span></div>
+    <div class="summary-item"><span class="summary-label">Correct</span><span class="summary-value">${summary.correct_answers || 0}</span></div>
+    <div class="summary-item"><span class="summary-label">Score</span><span class="summary-value" style="color: ${(summary.score_percent || 0) >= 70 ? 'var(--success)' : 'var(--error)'}">${summary.score_percent || 0}%</span></div>
   `;
 
   modal.style.display = "flex";
@@ -438,23 +418,21 @@ function closeSummary() {
 }
 
 // ===========================
-// UI — Helpers
+// Helpers
 // ===========================
 
 function setStatus(text, active) {
-  document.getElementById("status-text").textContent = text;
+  const statusText = document.getElementById("status-text");
   const dot = document.getElementById("status-dot");
-  if (active) {
-    dot.classList.add("active");
-  } else {
-    dot.classList.remove("active");
+  if (statusText) statusText.textContent = text;
+  if (dot) {
+    if (active) { dot.classList.add("active"); } else { dot.classList.remove("active"); }
   }
 }
 
 function updateScore() {
-  document.getElementById("score-value").textContent = `${correctAnswers} / ${totalQuestions}`;
-  const pct = totalQuestions > 0 ? (correctAnswers / totalQuestions * 100) : 0;
-  document.getElementById("score-bar").style.width = `${pct}%`;
+  const el = document.getElementById("toolbar-score");
+  if (el) el.textContent = `${correctAnswers}/${totalQuestions}`;
 }
 
 function updateTimer() {
@@ -462,13 +440,12 @@ function updateTimer() {
   const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
   const mins = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const secs = String(elapsed % 60).padStart(2, "0");
-  document.getElementById("session-timer").textContent = `${mins}:${secs}`;
+  const el = document.getElementById("session-timer");
+  if (el) el.textContent = `${mins}:${secs}`;
 }
 
 function formatDuration(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 function escapeJS(str) {
@@ -478,17 +455,36 @@ function escapeJS(str) {
 function questionAnswered() {
   unansweredCount = Math.max(0, unansweredCount - 1);
   if (unansweredCount === 0) {
-    setStatus("\u{1F44D} All caught up! Scanning for more...", true);
+    setStatus("👍 All done! Scanning...", true);
+    setTimeout(async () => {
+      if (unansweredCount === 0 && captureInterval) {
+        await hideQuestionsPanel();
+      }
+    }, 3000);
   }
 }
 
-function showGreeting() {
-  const container = document.getElementById("questions-container");
-  const emptyState = document.getElementById("empty-state");
-  if (emptyState) emptyState.remove();
+async function closeApp() {
+  try {
+    if (window.__TAURI_INTERNALS__) {
+      // Exit the entire process
+      await window.__TAURI_INTERNALS__.invoke('plugin:process|exit', { code: 0 });
+      return;
+    }
+  } catch (e) {
+    console.error('Close failed:', e);
+  }
+  // Fallback
+  window.close();
+}
 
-  const bubble = document.createElement('div');
-  bubble.className = 'chat-bubble';
-  bubble.innerHTML = `\u{1F44B} <strong>Hey! I'm DeskMate.</strong><br>I'll watch what you're studying and quiz you to help you learn better. Just keep reading \u2014 I'll ask when I spot something interesting!`;
-  container.appendChild(bubble);
+async function startDrag(event) {
+  event.preventDefault();
+  try {
+    if (window.__TAURI_INTERNALS__) {
+      await window.__TAURI_INTERNALS__.invoke('plugin:window|start_dragging', { label: 'main' });
+    }
+  } catch (e) {
+    console.error('Drag failed:', e);
+  }
 }

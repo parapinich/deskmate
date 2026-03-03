@@ -1,17 +1,15 @@
 // DeskMate — Tauri Main Entry Point
-// Registers commands: take_screenshot
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::process::Command;
 use std::path::PathBuf;
 use std::env;
+use tauri::Manager;
 
 /// Tauri command: call the Python sidecar to capture a screenshot.
-/// Returns the JSON string with base64 screenshot data.
 #[tauri::command]
 async fn take_screenshot() -> Result<String, String> {
-    // Resolve capture.py path relative to the executable location
     let capture_path = find_capture_script()
         .map_err(|e| format!("Cannot find capture.py: {}", e))?;
 
@@ -35,18 +33,33 @@ async fn take_screenshot() -> Result<String, String> {
     Ok(trimmed)
 }
 
+/// Tauri command: resize and reposition the window
+#[tauri::command]
+async fn resize_window(
+    window: tauri::Window,
+    width: f64,
+    height: f64,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    use tauri::{LogicalSize, LogicalPosition};
+    window
+        .set_size(tauri::Size::Logical(LogicalSize::new(width, height)))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(tauri::Position::Logical(LogicalPosition::new(x, y)))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Find capture.py by searching common locations
 fn find_capture_script() -> Result<String, String> {
     let candidates = vec![
-        // When running from src-tauri via cargo
         PathBuf::from("../../screencapture/capture.py"),
-        // When running from desktop directory
         PathBuf::from("../screencapture/capture.py"),
-        // Absolute fallback using known project structure
         PathBuf::from("D:/deskmate/screencapture/capture.py"),
     ];
 
-    // Also try relative to current exe
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let from_exe = exe_dir.join("../../../screencapture/capture.py");
@@ -62,15 +75,16 @@ fn find_capture_script() -> Result<String, String> {
         }
     }
 
-    // Last resort: just return the absolute path
     Ok("D:/deskmate/screencapture/capture.py".to_string())
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
-            take_screenshot
+            take_screenshot,
+            resize_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running DeskMate");
