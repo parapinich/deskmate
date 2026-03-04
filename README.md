@@ -65,6 +65,8 @@ deskmate/
 ├── screencapture/                    # Python sidecar for native screenshots
 │   ├── capture.py
 │   └── requirements.txt
+├── .env.example
+├── .github/workflows/build.yml        # CI/CD pipeline
 ├── cloudbuild.yaml
 ├── gcp_proof/
 │   └── vertex_ai_call.py
@@ -89,7 +91,7 @@ deskmate/
 ```bash
 gcloud auth login
 gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
+gcloud config set project deskmate-488522
 gcloud services enable aiplatform.googleapis.com
 ```
 
@@ -99,9 +101,12 @@ gcloud services enable aiplatform.googleapis.com
 ```bash
 cd backend
 pip install -r requirements.txt
-export GCP_PROJECT_ID=YOUR_PROJECT_ID   # Linux/Mac
-set GCP_PROJECT_ID=YOUR_PROJECT_ID      # Windows CMD
-$env:GCP_PROJECT_ID="YOUR_PROJECT_ID"   # PowerShell
+
+# Set your GCP Project ID (see .env.example)
+export GCP_PROJECT_ID=deskmate-488522   # Linux/Mac
+set GCP_PROJECT_ID=deskmate-488522      # Windows CMD
+$env:GCP_PROJECT_ID="deskmate-488522"   # PowerShell
+
 uvicorn main:app --reload --port 8080
 ```
 
@@ -121,7 +126,7 @@ npm run tauri dev
 ### Deploy to Cloud Run
 ```bash
 gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
+gcloud config set project deskmate-488522
 gcloud builds submit --config cloudbuild.yaml
 ```
 
@@ -129,7 +134,7 @@ gcloud builds submit --config cloudbuild.yaml
 
 ## ☁️ Google Cloud Proof
 
-- **Health endpoint:** `https://YOUR_CLOUD_RUN_URL/health`
+- **Health endpoint:** `https://deskmate-backend-<hash>.run.app/health`
 - **Vertex AI proof script:** `python gcp_proof/vertex_ai_call.py`
 
 ---

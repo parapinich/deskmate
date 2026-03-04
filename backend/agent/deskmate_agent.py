@@ -9,7 +9,7 @@ import base64
 from google import genai
 from google.genai import types
 
-PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "YOUR_PROJECT_ID")
+PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "deskmate-488522")
 LOCATION = os.environ.get("GCP_LOCATION", "us-central1")
 
 client = genai.Client(

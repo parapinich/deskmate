@@ -42,7 +42,7 @@ async def health():
         "status": "running",
         "platform": "Google Cloud Run",
         "model": "gemini-2.0-flash",
-        "vertex_ai_project": os.environ.get("GCP_PROJECT_ID", "YOUR_PROJECT_ID"),
+        "vertex_ai_project": os.environ.get("GCP_PROJECT_ID", "deskmate-488522"),
         "vertex_ai_location": os.environ.get("GCP_LOCATION", "us-central1"),
     }
 

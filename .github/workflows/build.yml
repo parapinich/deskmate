@@ -1,0 +1,65 @@
+name: Build DeskMate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Backend Tests ───
+  backend-check:
+    name: Backend Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          cd backend
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ─── Desktop Build ───
+  desktop-build:
+    name: Build Desktop App
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: |
+          cd desktop
+          npm install
+
+      - name: Build Tauri App
+        run: |
+          cd desktop
+          npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskmate-installer
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 30
