@@ -35,6 +35,42 @@ let unansweredCount = 0;
 let panelExpanded = false;
 let historyExpanded = false;
 let answeredHistory = [];
+let sessionMode = "proactive"; // "manual" or "proactive"
+let proactiveTimeout = null;
+
+// ===========================
+// Sound Effects (Web Audio API)
+// ===========================
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playTone(freq, dur, type = 'sine') {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = 0.12;
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g).connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + dur);
+}
+
+function playCorrectSound() {
+  playTone(523, 0.1); setTimeout(() => playTone(659, 0.1), 100); setTimeout(() => playTone(784, 0.2), 200);
+}
+
+function playWrongSound() {
+  playTone(330, 0.15, 'square'); setTimeout(() => playTone(277, 0.25, 'square'), 150);
+}
+
+function playNewQuestionSound() {
+  playTone(440, 0.08); setTimeout(() => playTone(554, 0.08), 80); setTimeout(() => playTone(659, 0.12), 160);
+}
+
+function playStartSound() {
+  playTone(392, 0.1); setTimeout(() => playTone(523, 0.1), 120); setTimeout(() => playTone(659, 0.15), 240);
+}
 
 // ===========================
 // Tauri API
@@ -115,8 +151,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.log("WebSocket connected!");
-    setStatus("Watching your screen...", true);
-    setTimeout(captureAndSend, 2000);
+    setStatus(sessionMode === 'proactive' ? '⏳ Watching... quiz in 1 min' : '👀 Ready! Click 🎯 to quiz', true);
   };
 
   ws.onmessage = (event) => {
@@ -141,7 +176,7 @@ function connectWebSocket() {
           showQuestionsPanel();
         }
       } else if (data.is_study_material === false && !data.skipped) {
-        setStatus("👀 Watching...", true);
+        setStatus(sessionMode === 'proactive' ? '⏳ No study material... watching' : '👀 No study material found', true);
       }
     } catch (err) {
       console.error("Failed to parse message:", err);
@@ -151,7 +186,7 @@ function connectWebSocket() {
   ws.onerror = () => setStatus("⚠ Error", false);
 
   ws.onclose = () => {
-    if (captureInterval) {
+    if (timerInterval) {
       setStatus("Reconnecting...", false);
       setTimeout(connectWebSocket, 3000);
     }
@@ -191,26 +226,52 @@ async function captureAndSend() {
 // Session Controls
 // ===========================
 
-async function startSession() {
+async function startSession(mode = 'proactive') {
+  sessionMode = mode;
   sessionStartTime = Date.now();
+  playStartSound();
 
   // Switch UI: card → bar
   document.getElementById("card-view").style.display = "none";
   document.getElementById("bar-view").style.display = "flex";
 
+  // Update mode badge
+  const badge = document.getElementById("mode-badge");
+  if (mode === 'manual') {
+    badge.textContent = '🎯 Manual';
+    document.getElementById('btn-quiz').style.display = 'inline-flex';
+  } else {
+    badge.textContent = '🤖 Proactive';
+    document.getElementById('btn-quiz').style.display = 'none';
+  }
+
   // Resize window to toolbar
   await switchToBar();
 
-  // Connect and start
+  // Connect WebSocket
   connectWebSocket();
-  captureInterval = setInterval(captureAndSend, CAPTURE_INTERVAL_MS);
   timerInterval = setInterval(updateTimer, 1000);
   unansweredCount = 0;
+
+  if (mode === 'proactive') {
+    // Proactive: wait 60s before first quiz
+    setStatus('⏳ Watching... quiz in 1 min', true);
+    proactiveTimeout = setTimeout(() => captureAndSend(), 60000);
+  } else {
+    // Manual: just watch, user clicks quiz button
+    setStatus('👀 Ready! Click 🎯 to quiz', true);
+  }
+}
+
+async function manualQuiz() {
+  if (unansweredCount > 0) return;
+  await captureAndSend();
 }
 
 async function endSession() {
   if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (proactiveTimeout) { clearTimeout(proactiveTimeout); proactiveTimeout = null; }
   if (ws) { ws.close(); ws = null; }
 
   setStatus("Session ended", false);
@@ -358,6 +419,7 @@ function displayQuestions(questions, topic) {
 
     container.insertBefore(card, container.firstChild);
   });
+  playNewQuestionSound();
 }
 
 // ===========================
@@ -388,7 +450,7 @@ async function submitMCQ(qid, correctAnswer, topic) {
     if (b.dataset.choice.charAt(0).toUpperCase() === correctLetter) b.classList.add("correct");
   });
 
-  if (!isCorrect) { selected.classList.add("wrong"); } else { correctAnswers++; }
+  if (!isCorrect) { selected.classList.add("wrong"); playWrongSound(); } else { correctAnswers++; playCorrectSound(); }
   updateScore();
 
   const questionText = card.querySelector(".question-text").textContent;
@@ -507,12 +569,21 @@ function escapeJS(str) {
 function questionAnswered() {
   unansweredCount = Math.max(0, unansweredCount - 1);
   if (unansweredCount === 0) {
-    setStatus("👍 All done! Scanning...", true);
+    setStatus("👍 All done!", true);
     setTimeout(async () => {
-      if (unansweredCount === 0 && captureInterval) {
+      if (unansweredCount === 0) {
         await hideQuestionsPanel();
       }
     }, 3000);
+
+    // Re-arm proactive timer: 60s after answering
+    if (sessionMode === 'proactive') {
+      if (proactiveTimeout) clearTimeout(proactiveTimeout);
+      setStatus('⏳ Next quiz in 1 min...', true);
+      proactiveTimeout = setTimeout(() => captureAndSend(), 60000);
+    } else {
+      setStatus('👀 Ready! Click 🎯 to quiz', true);
+    }
   }
 }
 

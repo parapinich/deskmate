@@ -26,9 +26,16 @@
       <h2 class="card-title">Start a Study Session</h2>
       <p class="card-desc">I'll watch your screen and quiz you on what you're studying. Just open your study material
         and let me help! 📚</p>
-      <button id="btn-start" class="card-btn" onclick="startSession()">
-        ▶ Start Session
-      </button>
+      <div class="card-modes">
+        <button class="card-btn card-btn-manual" onclick="startSession('manual')">
+          🎯 Quiz Me
+          <span class="card-btn-sub">Click when ready to be quizzed</span>
+        </button>
+        <button class="card-btn card-btn-proactive" onclick="startSession('proactive')">
+          🤖 Proactive Agent
+          <span class="card-btn-sub">AI quizzes you every minute</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -42,9 +49,12 @@
           <div class="status-dot" id="status-dot"></div>
           <span id="status-text" class="toolbar-status-text">Watching...</span>
         </div>
+        <span class="toolbar-mode-badge" id="mode-badge">🤖 Proactive</span>
       </div>
       <div class="toolbar-right">
         <span class="toolbar-score" id="toolbar-score">0/0</span>
+        <button class="toolbar-btn-icon" id="btn-quiz" onclick="manualQuiz()" title="Quiz Me Now"
+          style="display:none;">🎯</button>
         <button class="toolbar-btn-icon" id="btn-history" onclick="toggleHistory()" title="Answer History">📋</button>
         <span class="toolbar-timer" id="session-timer">00:00</span>
         <button class="toolbar-btn-end" onclick="endSession()">⏹</button>

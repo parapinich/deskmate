@@ -31,7 +31,7 @@
 html,
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: transparent;
+  background: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
   margin: 0;
@@ -128,24 +128,75 @@ body {
   max-width: 320px;
 }
 
+.card-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+}
+
 .card-btn {
   width: 100%;
-  max-width: 280px;
   padding: 14px 24px;
   background: linear-gradient(135deg, var(--accent), var(--accent-light));
   border: none;
   border-radius: var(--radius);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: white;
   cursor: pointer;
   transition: var(--transition);
   font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-btn-sub {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.card-btn-proactive {
+  background: linear-gradient(135deg, #059669, #34D399);
 }
 
 .card-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px var(--accent-glow);
+}
+
+.card-btn-proactive:hover {
+  box-shadow: 0 8px 24px var(--success-glow);
+}
+
+.toolbar-mode-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+#btn-quiz {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
 }
 
 /* ===========================
